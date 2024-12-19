@@ -1,257 +1,308 @@
 (function() {
-    // Pseudo-global variables
     var attrArray = ["Median income per household", "Mean income per household", "Population", "GDP in Thousands of Chained Dollars", "Average Monthly Unemployment"];
-    console.log("attrArray: ", attrArray);
+    var expressed = attrArray[1]; 
+    var selectedCounty = null;
 
-    var expressed = attrArray[1]; // Initial attribute
-    console.log("expressed attribute: ", expressed);
+    window.onload = initialize;
 
-    // Begin script when window loads
-    window.onload = setMap;
+    function initialize(){
+        createDropdown();
+        setMap();
+    }
 
     function setMap() {
-        // Map frame dimensions
         var width = window.innerWidth * 0.5,
             height = 800;
-    
+
         var zoom = d3.zoom()
             .scaleExtent([1, 8])
             .on("zoom", zoomed);
-    
-        var svg = d3.select("body")
+
+        var svg = d3.select("#mapContainer")
             .append("svg")
             .attr("class", "map")
             .attr("width", width)
             .attr("height", height)
             .call(zoom)
             .on("click", reset);
-    
+
+        // Add a title across the top
+        svg.append("text")
+           .attr("class", "mapTitle")
+           .attr("x", width / 2)
+           .attr("y", 30)
+           .style("text-anchor", "middle")
+           .style("font-size", "24px")
+           .text("California Socioeconomic Choropleth Mapper");
+
         var map = svg.append("g");
-    
-        // Create custom conic equal area projection
+
         var projection = d3.geoConicEqualArea()
             .parallels([33, 45])
-            .scale(5500)
+            .scale(4500)
             .translate([-270, 780])
             .rotate([120, 0])
-            .center([-10, 34]);
-    
-        // Create a path generator using the projection
+            .center([-5, 34]);
+
         var path = d3.geoPath().projection(projection);
-        console.log("path: ", path);
-    
-        // Use Promise.all to parallelize asynchronous data loading
+
         var promises = [];
-        promises.push(d3.csv("data/Cali_County_Data.csv")); // Load attributes from CSV
-        promises.push(d3.json("data/Surrounding_Cali_States_Provinces.topojson")); // Load surrounding states spatial data
-        promises.push(d3.json("data/California_Counties.topojson")); // Load California counties spatial data
+        promises.push(d3.csv("data/Cali_County_Data.csv"));
+        promises.push(d3.json("data/Surrounding_Cali_States_Provinces.topojson"));
+        promises.push(d3.json("data/California_Counties.topojson"));
         Promise.all(promises).then(callback).catch(function(error) {
             console.error("Error loading data: ", error);
         });
-    
+
         function callback(data) {
             var csvData = data[0],
                 caliCounties = data[2],
                 surrounding = data[1];
-    
-            console.log("csvData: ", csvData);
-            console.log("California Counties topojson: ", caliCounties);
-            console.log("Surrounding States topojson: ", surrounding);
-    
-            // Translate TopoJSONs back to GeoJSON
+
             var californiaCounties = topojson.feature(caliCounties, caliCounties.objects.California_Counties).features;
             var surroundingStates = topojson.feature(surrounding, surrounding.objects.Surrounding_Cali_States_Provinces).features;
-    
-            // Call functions with the loaded data
+
             setGraticule(map, path, surroundingStates);
             joinData(californiaCounties, csvData);
+
             var colorScale = makeColorScale(californiaCounties);
+
             setEnumerationUnits(californiaCounties, map, path, colorScale);
-            
-            // Add coordinated visualization to the map
             setChart(csvData, colorScale, expressed);
-    
-            // Attach the clicked function to the counties with path as an argument
-            map.selectAll(".counties")
-                .data(californiaCounties)
-                .enter().append("path")
-                .attr("class", "counties")
-                .attr("d", path)
-                .on("click", function(event, d) { clicked(event, d, path); });
+            createLegend(colorScale, width);
+
+            function clicked(event, d) {
+                event.stopPropagation();
+                d3.selectAll(".counties.highlighted").classed("highlighted", false);
+
+                const [[x0, y0], [x1, y1]] = path.bounds(d);
+                d3.select(this).classed("highlighted", true);
+                selectedCounty = d.properties.California_County;
+
+                svg.transition().duration(750).call(
+                    zoom.transform,
+                    d3.zoomIdentity
+                    .translate(width / 2, height / 2)
+                    .scale(Math.min(8, 0.9 / Math.max((x1 - x0) / width, (y1 - y0) / height)))
+                    .translate(-(x0 + x1) / 2, -(y0 + y1) / 2),
+                    d3.pointer(event, svg.node())
+                );
+            }
+
+            d3.selectAll(".counties").on("click", clicked);
+
+            d3.selectAll(".counties")
+              .on("mouseover", function(event, d) {
+                showTooltip(event, d.properties.California_County, d.properties[expressed]);
+                highlight(d.properties.California_County);
+              })
+              .on("mousemove", moveTooltip)
+              .on("mouseout", function(event, d) {
+                hideTooltip();
+                dehighlight(d.properties.California_County);
+              });
         }
-    
+
         function zoomed(event) {
             const {transform} = event;
             map.attr("transform", transform);
             map.attr("stroke-width", 1 / transform.k);
         }
-    
+
         function reset() {
-            map.selectAll(".counties").transition().style("fill", null);
-            svg.transition().duration(750).call(
+            d3.selectAll(".counties.highlighted").classed("highlighted", false);
+            selectedCounty = null;
+            d3.selectAll(".counties")
+                .transition()
+                .style("fill", null);
+
+            d3.select("svg.map").transition().duration(750).call(
                 zoom.transform,
                 d3.zoomIdentity,
-                d3.zoomTransform(svg.node()).invert([width / 2, height / 2])
+                d3.zoomTransform(d3.select("svg.map").node()).invert([window.innerWidth * 0.5 / 2, 800 / 2])
             );
         }
-    }; //end of setMap
-    
-    // Define the clicked function outside of setMap
-    function clicked(event, d) {
-
-        const [[x0, y0], [x1, y1]] = path.bounds(d);
-        event.stopPropagation();
-        d3.selectAll(".counties").transition().style("fill", null);
-        d3.select(this).transition().style("fill", "red");
-        d3.select("svg").transition().duration(750).call(
-            zoom.transform,
-            d3.zoomIdentity
-                .translate(width / 2, height / 2)
-                .scale(Math.min(8, 0.9 / Math.max((x1 - x0) / width, (y1 - y0) / height)))
-                .translate(-(x0 + x1) / 2, -(y0 + y1) / 2),
-            d3.pointer(event, d3.select("svg").node())
-        );
     }
-    
-    
 
-    // Function to create color scale generator
+    function highlight(countyName) {
+        var countyID = countyName.replace(/\s+/g, '_');
+        d3.select("#" + countyID).classed("highlighted", true);
+        d3.select("#" + countyID + "_bar").classed("highlighted", true);
+    }
+
+    function dehighlight(countyName) {
+        var countyID = countyName.replace(/\s+/g, '_');
+        if (countyName !== selectedCounty) {
+            d3.select("#" + countyID).classed("highlighted", false);
+        }
+        d3.select("#" + countyID + "_bar").classed("highlighted", false);
+    }
+
+    function showTooltip(event, name, value) {
+        var tooltip = d3.select("#tooltip");
+        tooltip.style("display", "block")
+               .html("<strong>" + name + "</strong><br>" + expressed + ": " + value);
+        moveTooltip(event);
+    }
+
+    function moveTooltip(event) {
+        var tooltip = d3.select("#tooltip");
+        var x = event.pageX + 10;
+        var y = event.pageY + 10;
+        tooltip.style("left", x + "px")
+               .style("top", y + "px");
+    }
+
+    function hideTooltip() {
+        d3.select("#tooltip").style("display", "none");
+    }
+
+    function createDropdown() {
+        var dropdown = d3.select("#attributeSelect");
+        dropdown.selectAll("option")
+            .data(attrArray)
+            .enter()
+            .append("option")
+            .attr("value", function(d){ return d; })
+            .text(function(d){ return d; });
+
+        dropdown.on("change", function(e) {
+            expressed = e.target.value;
+            updateMapAndChart();
+        });
+    }
+
+    function updateMapAndChart() {
+        d3.csv("data/Cali_County_Data.csv").then(function(csvData) {
+            d3.json("data/California_Counties.topojson").then(function(caliCounties) {
+                var californiaCounties = topojson.feature(caliCounties, caliCounties.objects.California_Counties).features;
+                joinData(californiaCounties, csvData);
+                var colorScale = makeColorScale(californiaCounties);
+
+                d3.selectAll(".counties")
+                  .transition()
+                  .style("fill", function(d) {
+                      return colorScale(d.properties[expressed]);
+                  });
+
+                setChart(csvData, colorScale, expressed);
+                createLegend(colorScale, window.innerWidth * 0.5);
+            });
+        });
+    }
+
     function makeColorScale(data){
-        var colorClasses = [
-            "#D4B9DA",
-            "#C994C7",
-            "#DF65B0",
-            "#DD1C77",
-            "#980043"
-        ];
+        var colorClasses = ["#D4B9DA","#C994C7","#DF65B0","#DD1C77","#980043"];
+        var colorScale = d3.scaleThreshold().range(colorClasses);
 
-        // Create color scale generator
-        var colorScale = d3.scaleThreshold()
-            .range(colorClasses);
-
-        // Build array of all values of the expressed attribute
         var domainArray = [];
         for (var i = 0; i < data.length; i++) {
             var val = parseFloat(data[i].properties[expressed]);
             domainArray.push(val);
-        };
+        }
 
-        // Cluster data using ckmeans clustering algorithm to create natural breaks
         var clusters = ss.ckmeans(domainArray, 5);
-        // Reset domain array to cluster minimums
         domainArray = clusters.map(function(d){
             return d3.min(d);
         });
-        // Remove first value from domain array to create class breakpoints
         domainArray.shift();
-
-        // Assign array of last 4 cluster minimums as domain
         colorScale.domain(domainArray);
 
-        return colorScale;        
-    };
+        return colorScale;
+    }
 
     function setGraticule(map, path, surroundingStates) {
-        // Create graticule generator
-        var graticule = d3.geoGraticule()
-            .step([5, 5]); // Place graticule lines every 5 degrees of longitude and latitude
+        var graticule = d3.geoGraticule().step([5, 5]);
 
-        // Create graticule background
-        var gratBackground = map.append("path")
-            .datum(graticule.outline()) // Bind graticule background
-            .attr("class", "gratBackground") // Assign class for styling
-            .attr("d", path); // Project graticule
+        map.append("path")
+           .datum(graticule.outline())
+           .attr("class", "gratBackground")
+           .attr("d", path);
 
-        // Create graticule lines
-        var gratLines = map.selectAll(".gratLines") // Select graticule elements that will be created
-            .data(graticule.lines()) // Bind graticule lines to each element to be created
-            .enter() // Create an element for each datum
-            .append("path") // Append each element to the SVG as a path element
-            .attr("class", "gratLines") // Assign class for styling
-            .attr("d", path); // Project graticule lines
+        map.selectAll(".gratLines")
+           .data(graticule.lines())
+           .enter()
+           .append("path")
+           .attr("class", "gratLines")
+           .attr("d", path);
 
-        var states = map.selectAll(".states")
-            .data(surroundingStates)
-            .enter()
-            .append("path")
-            .attr("class", function(d) {
-                return "states " + d.properties.name; // Name of the name field is "name"
-            })
-            .attr("d", path);
+        map.selectAll(".states")
+           .data(surroundingStates)
+           .enter()
+           .append("path")
+           .attr("class", function(d) {
+               return "states " + d.properties.name;
+           })
+           .attr("d", path);
     }
 
     function joinData(californiaCounties, csvData) {
         for (var i = 0; i < csvData.length; i++) {
-            var csvRegion = csvData[i]; // The current county
-            var csvKey = csvRegion.California_County; // The CSV primary key
+            var csvRegion = csvData[i];
+            var csvKey = csvRegion.California_County;
 
             for (var a = 0; a < californiaCounties.length; a++) {
-                var geojsonProps = californiaCounties[a].properties; // The current county geojson properties
-                var geojsonKey = geojsonProps.NAME_ALT; // The geojson primary key
+                var geojsonProps = californiaCounties[a].properties;
+                var geojsonKey = geojsonProps.NAME_ALT;
 
-                // Where primary keys match, transfer CSV data to geojson properties object
                 if (geojsonKey == csvKey) {
-                    // Assign all attributes and values
+                    geojsonProps.California_County = csvKey;
                     attrArray.forEach(function(attr) {
-                        var val = parseFloat(csvRegion[attr]); // Get CSV attribute value
-                        geojsonProps[attr] = val; // Assign attribute and value to geojson properties
+                        var val = parseFloat(csvRegion[attr]);
+                        geojsonProps[attr] = val;
                     });
                 }
-                //console.log("test:",geojsonProps);
             }
         }
-    };
+    }
 
     function setEnumerationUnits(californiaCounties, map, path, colorScale){
-        // Add California counties to map
-        var counties = map.selectAll(".counties")
-            .data(californiaCounties) // Pass in the reconverted GeoJSON
+        map.selectAll(".counties").remove();
+
+        map.selectAll(".counties")
+            .data(californiaCounties)
             .enter()
             .append("path")
             .attr("class", function(d) {
-                return "counties " + d.properties.NAME_ALT;
+                return "counties " + d.properties.California_County;
+            })
+            .attr("id", function(d) {
+                return d.properties.California_County.replace(/\s+/g, '_');
             })
             .attr("d", path)
             .style("fill", function(d) {
                 return colorScale(d.properties[expressed]);
-            })
-            .on("click", clicked); //Add click event listener
+            });
+    }
 
-        console.log("Converted GeoJSON features: ", californiaCounties);
-    };
-
-    // Function to create coordinated bar chart
     function setChart(csvData, colorScale, expressed){
-        // Chart frame dimensions
+        d3.select("#chartContainer").selectAll("svg").remove();
+
         var chartWidth = window.innerWidth * 0.425,
             chartHeight = 500,
-            leftPadding = 50,  // Increased left padding
+            leftPadding = 50,
             rightPadding = 2,
             topBottomPadding = 5,
             chartInnerWidth = chartWidth - leftPadding - rightPadding,
             chartInnerHeight = chartHeight - topBottomPadding * 2,
             translate = "translate(" + leftPadding + "," + topBottomPadding + ")";
 
-        // Create a second svg element to hold the bar chart
-        var chart = d3.select("body")
+        var chart = d3.select("#chartContainer")
             .append("svg")
             .attr("width", chartWidth)
             .attr("height", chartHeight)
             .attr("class", "chart");
 
-        // Create a rectangle for chart background fill
-        var chartBackground = chart.append("rect")
+        chart.append("rect")
             .attr("class", "chartBackground")
             .attr("width", chartInnerWidth)
-            .attr("height", chartInnerHeight)  // Match chartBackground height to chartInnerHeight
+            .attr("height", chartInnerHeight)
             .attr("transform", translate);
 
-        // Create a scale to size bars proportionally to frame and for axis
         var yScale = d3.scaleLinear()
-            .range([chartInnerHeight, 20])  // Adjusted range to match inner height
+            .range([chartInnerHeight, 20])
             .domain([0, d3.max(csvData, function(d) { return parseFloat(d[expressed]); })]);
 
-        // Set bars for each province
         var bars = chart.selectAll(".bar")
             .data(csvData)
             .enter()
@@ -259,47 +310,95 @@
             .sort(function(a, b){
                 return a[expressed] - b[expressed];
             })
-            .attr("class", function(d){
-                return "bar " + d.adm1_code;
+            .attr("class", "bar")
+            .attr("id", function(d){
+                return d.California_County.replace(/\s+/g, '_') + "_bar";
             })
-            .attr("width", chartInnerWidth / csvData.length - 1)  // Adjusted width calculation
+            .attr("width", chartInnerWidth / csvData.length - 1)
             .attr("x", function(d, i){
                 return i * (chartInnerWidth / csvData.length) + leftPadding;
             })
             .attr("height", function(d){
-                return chartInnerHeight - yScale(parseFloat(d[expressed]));  // Adjusted height calculation
+                return chartInnerHeight - yScale(parseFloat(d[expressed]));
             })
             .attr("y", function(d){
-                return yScale(parseFloat(d[expressed])) + 5;  // Adjusted y position
+                return yScale(parseFloat(d[expressed])) + 5;
             })
             .style("fill", function(d){
                 return colorScale(d[expressed]);
+            })
+            .on("mouseover", function(event, d) {
+                showTooltip(event, d.California_County, d[expressed]);
+                highlight(d.California_County);
+            })
+            .on("mousemove", moveTooltip)
+            .on("mouseout", function(event, d) {
+                hideTooltip();
+                dehighlight(d.California_County);
             });
 
-        // Create a text element for the chart title
-        var chartTitle = chart.append("text")
+        chart.append("text")
             .attr("x", 100)
             .attr("y", 40)
             .attr("class", "chartTitle")
             .text(expressed);
 
-        // Create vertical axis generator
-        var yAxis = d3.axisLeft()
-            .scale(yScale)
-            .tickFormat(d3.format(".0f"));  // Format ticks as integers
+        var yAxis = d3.axisLeft().scale(yScale).tickFormat(d3.format(".0f"));
 
-        // Place axis
-        var axis = chart.append("g")
+        chart.append("g")
             .attr("class", "axis")
             .attr("transform", translate)
             .call(yAxis);
 
-        // Create frame for chart border
-        var chartFrame = chart.append("rect")
+        chart.append("rect")
             .attr("class", "chartFrame")
             .attr("width", chartInnerWidth)
             .attr("height", chartInnerHeight)
             .attr("transform", translate);
-    };
+    }
 
+    function createLegend(colorScale, width) {
+        d3.selectAll(".legend").remove();
+
+        var legendHeight = 60;
+        var legendWidth = width;
+        var colorRange = colorScale.range();
+        var domain = colorScale.domain();
+        var numClasses = colorRange.length;
+
+        var legend = d3.select("#mapContainer").append("svg")
+            .attr("class", "legend")
+            .attr("width", legendWidth)
+            .attr("height", legendHeight);
+
+        // Scale to position each color box evenly
+        var xScale = d3.scaleLinear()
+            .domain([0, numClasses])
+            .range([20, legendWidth - 20]); 
+
+        // Calculate the width of each box
+        var boxWidth = (legendWidth - 40) / numClasses;
+
+        legend.selectAll("rect")
+            .data(colorRange)
+            .enter()
+            .append("rect")
+            .attr("x", function(d,i) { return xScale(i); })
+            .attr("y", 20)
+            .attr("width", boxWidth)
+            .attr("height", 15)
+            .style("fill", function(d) { return d; });
+
+        var extents = [0].concat(domain);
+
+        legend.selectAll("text")
+            .data(extents)
+            .enter()
+            .append("text")
+            .attr("x", function(d, i) { 
+                return xScale(i); 
+            })
+            .attr("y", 50)
+            .text(function(d) { return Math.round(d); });
+    }
 })();
