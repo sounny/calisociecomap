@@ -1,0 +1,31 @@
+<!DOCTYPE html> <!-- Document type declaration -->
+<html lang="en"> <!-- Start of the HTML document with language set to English -->
+<head> <!-- Head section containing metadata -->
+    <meta charset="utf-8"> <!-- Character encoding set to UTF-8 -->
+    <meta name="viewport" content="width=device-width"> <!-- Responsive viewport for mobile devices -->
+    <title>Map and Chart</title> <!-- Page title -->
+    <link rel="stylesheet" href="css/style.css"> <!-- Link to external CSS stylesheet -->
+</head>
+<body> <!-- Start of the body section -->
+    <div id="container"> <!-- Main container div -->
+        <div id="mapContainer"></div> <!-- Container for the map -->
+        <div id="chartContainer"></div> <!-- Container for the chart -->
+    </div>
+
+    <!-- Dropdown controls -->
+    <div id="controls"> <!-- Controls container -->
+        <label for="attributeSelect">Select a Variable:</label> <!-- Label for the select element -->
+        <select id="attributeSelect"></select> <!-- Dropdown select element -->
+    </div>
+
+    <!-- Tooltip div -->
+    <div id="tooltip" style="position: absolute; padding: 5px; background: #fff; border: 1px solid #aaa; pointer-events: none; display: none;"></div> <!-- Tooltip styling -->
+
+    <!-- External JavaScript libraries -->
+    <script src="https://unpkg.com/simple-statistics@7.8.3/dist/simple-statistics.min.js"></script> <!-- Simple Statistics library -->
+    <script src="lib/d3.v7.js"></script> <!-- D3.js library -->
+    <script src="lib/topojson.js"></script> <!-- TopoJSON library -->
+    <script src="https://d3js.org/d3-geo-projection.v3.min.js"></script> <!-- D3 Geo Projection library -->
+    <script src="js/main.js"></script> <!-- Main JavaScript file -->
+</body>
+</html> <!-- End of the HTML document -->

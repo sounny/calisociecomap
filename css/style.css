@@ -1,0 +1,106 @@
+/* Add CSS styles here */
+
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+}
+
+#container {
+    display: flex;
+    flex-wrap: wrap;
+}
+
+#mapContainer,
+#chartContainer {
+    box-sizing: border-box;
+    padding: 10px;
+}
+
+#mapContainer {
+    flex: 1 1 50%;
+    min-width: 300px;
+}
+
+#chartContainer {
+    flex: 1 1 50%;
+    min-width: 300px;
+}
+
+#controls {
+    padding: 10px;
+}
+
+.map {
+    border: medium solid #999;
+    margin: 10px 0 0 20px;
+}
+
+.axis path,
+.axis line {
+    fill: none;
+    stroke: #999;
+    stroke-width: 1px;
+    shape-rendering: crispEdges;
+}
+
+.axis text {
+    font-family: sans-serif;
+    font-size: 0.8em;
+    fill: #999;
+}
+
+.title {
+    font-family: sans-serif;
+    font-size: 1.5em;
+    font-weight: bold;
+}
+
+.counties {
+    stroke: #000;
+    stroke-width: 0.5px;
+    stroke-linecap: round;
+}
+
+.gratLines {
+    fill: none;
+    stroke: #999;
+    stroke-width: 0.5px;
+}
+
+.gratBackground {
+    fill: #D5E3FF;
+}
+
+.states {
+    fill: #FFF;
+    stroke: #bebbbb;
+    stroke-width: 2px;
+}
+
+.numbers {
+    fill: white;
+    font-family: sans-serif;
+}
+
+.chart {
+    float: right;
+    margin: 7px 20px 0 0;
+}
+
+.chartTitle {
+    font-family: sans-serif;
+    font-size: 20px;
+    font-weight: bold;
+}
+
+.chartBackground {
+    fill: rgba(128, 128, 128, 0.2);
+}
+
+.chartFrame {
+    fill: none;
+    stroke: #999;
+    stroke-width: 3px;
+    shape-rendering: crispEdges;
+}
